@@ -1,0 +1,65 @@
+CREATE TABLE facilities (
+    facility_id     CHAR(8) PRIMARY KEY,      -- your FR 4 unique 8-digit ID
+    name            VARCHAR(100) NOT NULL,
+    location        VARCHAR(100),
+    facility_type   VARCHAR(50),              -- court, room, studio, outdoor, etc.
+    hours           TEXT,                     -- 8:30 to 9:30
+    managing_office VARCHAR(100),
+    description     TEXT,
+    map_x           FLOAT,                    -- coordinates for your map view
+    map_y           FLOAT
+);
+
+CREATE TABLE rules (
+    rule_id          SERIAL PRIMARY KEY,
+    facility_id      CHAR(8) REFERENCES facilities(facility_id),
+    cost_status      VARCHAR(20),   -- free, paid, varies by time
+    cost_notes       TEXT,          -- e.g. "$5/hour for non-students"
+    reservation_type VARCHAR(30),   -- reservable, first-come, drop-in
+    group_size_limit INT,           -- from your interview: 5+ = group rental
+    restrictions     TEXT,
+    rule_notes       TEXT
+);
+
+CREATE TABLE facility_hours (
+    hours_id    SERIAL PRIMARY KEY,
+    facility_id CHAR(8) REFERENCES facilities(facility_id),
+    day_of_week VARCHAR(10),
+    open_time   TIME,
+    close_time  TIME
+);
+
+CREATE TABLE schedules (
+    schedule_id SERIAL PRIMARY KEY,
+    facility_id CHAR(8) REFERENCES facilities(facility_id),
+    day_of_week VARCHAR(10),        -- Monday, Tuesday, etc.
+    start_time  TIME,
+    end_time    TIME,
+    status      VARCHAR(20),        -- open, reserved, class, closed
+    note        TEXT                -- e.g. "Fitness class - no open rec"
+);
+
+CREATE TABLE admins (
+    admin_id      SERIAL PRIMARY KEY,
+    username      VARCHAR(50) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL      -- never store plain text passwords
+);
+
+CREATE TABLE users (
+    user_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    duck_id VARCHAR(50) UNIQUE NOT NULL,
+    name    VARCHAR(100),
+    email   VARCHAR(100)
+);
+
+CREATE TABLE checkins (
+    checkin_id  SERIAL PRIMARY KEY,
+    facility_id CHAR(8) REFERENCES facilities(facility_id),
+    user_id     INTEGER REFERENCES users(user_id),
+    day_of_week VARCHAR(10),
+    start_time  TIMESTAMP,
+    end_time    TIMESTAMP,
+    group_size  INTEGER,
+    status      VARCHAR(20) DEFAULT 'active',
+    note        TEXT
+);
