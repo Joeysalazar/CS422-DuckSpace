@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Duck Space</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<header>
+    <p class="tag">CS 422 Student Project</p>
+    <h1>Duck Space</h1>
+    <p>Find campus spaces, check rules, compare study environments, and see basic availability guidance.</p>
+    <p class="notice">Not an official University of Oregon or Rec website.</p>
+</header>
+
+<main>
+    <section class="filters">
+        <h2>Find a Space</h2>
+
+        <div class="filter-grid">
+            <div>
+                <label>Search</label>
+                <input id="searchInput" type="text" placeholder="Search by name...">
+            </div>
+
+            <div>
+                <label>Category</label>
+                <select id="categoryFilter">
+                    <option value="all">All</option>
+                    <option value="Recreation">Recreation</option>
+                    <option value="Study">Study</option>
+                    <option value="Meeting">Meeting</option>
+                </select>
+            </div>
+
+            <div>
+                <label>Space Type</label>
+                <select id="typeFilter">
+                    <option value="all">All</option>
+                    <option value="Court">Court</option>
+                    <option value="Studio">Studio</option>
+                    <option value="Study Space">Study Space</option>
+                    <option value="Dining / Social">Dining / Social</option>
+                    <option value="Room">Room</option>
+                </select>
+            </div>
+
+            <div>
+                <label>Noise Level</label>
+                <select id="noiseFilter">
+                    <option value="all">Any</option>
+                    <option value="Quiet">Quiet</option>
+                    <option value="Moderate">Moderate</option>
+                    <option value="Loud">Loud</option>
+                </select>
+            </div>
+
+            <div>
+                <label>Day</label>
+                <select id="dayFilter">
+                    <option value="all">Any day</option>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                </select>
+            </div>
+
+            <div>
+                <label>Group Size</label>
+                <div class="group-size-control">
+                    <button type="button" id="decreaseGroup">-</button>
+                    <input id="groupSizeInput" type="number" min="1" value="1">
+                    <button type="button" id="increaseGroup">+</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="layout">
+        <div>
+            <h2>Spaces</h2>
+
+            <div class="cards">
+                {% for space in spaces %}
+                <article
+                    class="space-card"
+                    data-space='{{ space | tojson }}'
+                >
+                    <div class="card-top">
+                        <span>{{ space.category }}</span>
+                        <span>{{ space.facility_type }}</span>
+                        <span>{{ space.noise_level }}</span>
+                    </div>
+
+                    <h3>{{ space.name }}</h3>
+                    <p class="muted">{{ space.location }}</p>
+                    <p>{{ space.description }}</p>
+
+                    <div class="stats">
+                        <div>
+                            <strong>{{ space.current_count }}</strong>
+                            <small>checked in</small>
+                        </div>
+                        <div>
+                            <strong>{{ space.group_size_limit }}</strong>
+                            <small>group limit</small>
+                        </div>
+                    </div>
+
+                    <button class="analysis-button">View Analysis</button>
+                </article>
+                {% endfor %}
+            </div>
+        </div>
+
+        <aside id="analysisPanel">
+            <p class="tag">Space Analysis</p>
+            <h2>Select a space</h2>
+            <p>Choose a facility to see rules, schedule notes, usage estimate, noise level, and next steps.</p>
+        </aside>
+    </section>
+</main>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
