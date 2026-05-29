@@ -10,7 +10,7 @@ RULE_FIELDS = ["rule_id", "facility_id", "cost_status", "cost_notes",       # Bu
 SCHEDULE_FIELDS = ["schedule_id", "facility_id", "day_of_week", "start_time",
                    "end_time", "status", "note"]
 ADMIN_FIELDS = ["admin_id", "username", "password_hash"]
-USER_FIELDS = ["duck_id", "name", "email"]
+USER_FIELDS = ["name", "email"]
 CHECKIN_FIELDS = ["checkin_id", "facility_id", "user_id", "day_of_week",
                   "start_time", "end_time", "group_size", "status", "note"]
 
@@ -113,7 +113,7 @@ def validate_facility(facility: dict) -> bool:
 
     return True
 # ------------- Facility Hours Validation -------------
-def duplicate_facility_hours(facility_hours: dict) -> bool:
+def duplicate_facility_hours(facility_hours: dict, exclude_id = None) -> bool:
     """
     Returns true if facility hours object already exists in database
     """
@@ -121,9 +121,12 @@ def duplicate_facility_hours(facility_hours: dict) -> bool:
         Facility_Hours.facility_id == facility_hours["facility_id"],
         Facility_Hours.day_of_week == facility_hours["day_of_week"]
     )
+
+    if exclude_id is not None:
+        query = query.filter(Facility_Hours.facility_id != exclude_id)
     return query.first() is not None
 
-def validate_facility_hours(facility_hours: dict) -> bool:
+def validate_facility_hours(facility_hours: dict, exclude_id = None) -> bool:
     """
     Validate the fields of a facility_hours record before insertion or update.
 
@@ -157,7 +160,7 @@ def validate_facility_hours(facility_hours: dict) -> bool:
     if type(facility_hours["close_time"]) != time or not verify_time(facility_hours["close_time"]):
         return False
 
-    return not duplicate_facility_hours(facility_hours) 
+    return not duplicate_facility_hours(facility_hours, exclude_id) 
 
 # ------------- Rule Validation -------------
 def duplicate_rule(rule: dict) -> bool:
@@ -216,7 +219,7 @@ def validate_rule(rule: dict) -> bool:
     return not duplicate_rule(rule)
 
 # ------------- Schedule Validation -------------
-def duplicate_schedule(schedule: dict) -> bool:
+def duplicate_schedule(schedule: dict, exclude_id=None) -> bool:
     """
     Checks if schedule already exists in the database.
     The schedule object is represented as a dictionary.
@@ -227,6 +230,8 @@ def duplicate_schedule(schedule: dict) -> bool:
         Schedule.start_time == schedule["start_time"],
         Schedule.end_time == schedule["end_time"]
     )
+    if exclude_id is not None:
+        query = query.filter(Schedule.schedule_id != exclude_id)
     return query.first() is not None
 
 def schedule_conflict(facility_id, day_of_week, start_time, end_time, exclude_id=None) -> bool:
@@ -310,7 +315,8 @@ def validate_schedule(schedule: dict, update_schedule: bool) -> bool:
     if type(schedule["note"]) != str:
         return False
     
-    if duplicate_schedule(schedule):
+    exclude = schedule["schedule_id"] if update_schedule else None
+    if duplicate_schedule(schedule, exclude_id=exclude):
         return False
 
     if update_schedule:
@@ -430,16 +436,24 @@ def validate_checkin(checkin: dict, facility_ids: list[str], user_ids: list[int]
         return not checkin_conflict(checkin["facility_id"], checkin["day_of_week"], checkin["start_time"], checkin["end_time"])
 
 # ------------- User Validation -------------
-def validate_user(user: dict, duck_ids: list[str]) -> bool:
+def duplicate_user(user: dict) -> bool:
+    """
+    Returns true if user is duplicate false otherwise.
+    """
+    query = User.query.filter(
+        User.name == user["name"],
+        User.email == user["email"]
+    )
+
+    return query.first() is not None
+
+def validate_user(user: dict) -> bool:
     """
     Validate the fields of a user record before insertion.
 
     Checks that the dict contains exactly the expected keys
     (``USER_FIELDS``) and that every value satisfies the column constraints
     defined in the database schema:
-
-    - ``duck_id``: string, ≤ 50 characters, starts with "95" (UO DuckID
-      format), and not already present in ``duck_ids`` (enforces uniqueness)
     - ``name``: string, ≤ 100 characters
     - ``email``: string, ≤ 100 characters
 
@@ -448,24 +462,19 @@ def validate_user(user: dict, duck_ids: list[str]) -> bool:
 
     Args:
         user:     Dict representing a users row (without ``user_id``).
-        duck_ids: List of DuckID strings that already exist in the database,
-                  used to reject duplicate registrations.
 
     Returns:
-        True if all fields are valid and the DuckID is not a duplicate; False
-        otherwise.
+        True if all fields are valid and user isn't a duplicate.
     """
     if sorted(user.keys()) != sorted(USER_FIELDS):
         return False
 
-    if type(user["duck_id"]) != str or len(user["duck_id"]) > 50 or user["duck_id"][:2] != "95" or user["duck_id"] in duck_ids:
-        return False
     if type(user["name"]) != str or len(user["name"]) > 100:
         return False
     if type(user["email"]) != str or len(user["email"]) > 100:
         return False
 
-    return True
+    return not duplicate_user(user)
 
 # ------------- Admin Validation -------------
 def validate_admin(admin: dict, usernames: list[str]) -> bool:

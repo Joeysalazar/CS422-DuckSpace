@@ -47,7 +47,6 @@ CREATE TABLE admins (
 
 CREATE TABLE users (
     user_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    duck_id VARCHAR(50) UNIQUE NOT NULL,
     name    VARCHAR(100),
     email   VARCHAR(100)
 );

@@ -78,7 +78,7 @@ def get_facility(facility_id):
         200: JSON object with the facility's full details.
         404: If no facility with that ID exists.
     """
-    f = Facility.query.get_or_404(facility_id)
+    f = db.get_or_404(Facility, facility_id)
     return jsonify({
         "facility_id":     f.facility_id,
         "name":            f.name,
@@ -133,7 +133,7 @@ def get_hours(facility_id):
              day_of_week, open_time, and close_time (as "HH:MM:SS" strings).
         404: If no facility with that ID exists.
     """
-    Facility.query.get_or_404(facility_id)
+    db.get_or_404(Facility, facility_id)
     hours = Facility_Hours.query.filter_by(facility_id=facility_id).all()
     return jsonify([{
         "hours_id":    h.hours_id,
@@ -300,34 +300,26 @@ def create_user():
     Register a new user account.
 
     Request body (JSON):
-        duck_id (str): UO DuckID — must start with "95", ≤ 50 characters,
-                       and not already be registered.
         name    (str): Display name, ≤ 100 characters.
         email   (str): Email address, ≤ 100 characters.
 
     Returns:
         201: JSON object with a confirmation message and the new user_id.
-        400: If any field is missing, incorrectly typed, the duck_id does not
-             start with "95", or the duck_id is already registered.
+        400: If any field is missing, incorrectly typed, the user is already 
+        registered.
     """
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
 
-    # Fetch existing DuckIDs so validate_user can check for duplicates and
-    # enforce UO format (duck_id must start with "95")
-    existing_duck_ids = [u.duck_id for u in User.query.all()]
-
     user_dict = {
-        "duck_id": data.get("duck_id"),
         "name":    data.get("name"),
         "email":   data.get("email")
     }
-    if not validate_user(user_dict, existing_duck_ids):
-        return jsonify({"error": "Invalid user data — check all fields are present, duck_id starts with '95', and the DuckID is not already registered"}), 400
+    if not validate_user(user_dict):
+        return jsonify({"error": "Invalid user data — check all fields are present, and the user is not already present"}), 400
 
     user = User(
-        duck_id = data["duck_id"],
         name    = data["name"],
         email   = data["email"]
     )
@@ -490,7 +482,7 @@ def complete_checkin(checkin_id):
         404: If no check-in with that ID exists.
     """
     data    = request.get_json()
-    checkin = CheckIn.query.get_or_404(checkin_id)
+    checkin = db.get_or_404(CheckIn, checkin_id)
 
     if not data or "user_id" not in data:
         return jsonify({"error": "user_id is required"}), 400
@@ -524,7 +516,7 @@ def cancel_checkin(checkin_id):
         404: If no check-in with that ID exists.
     """
     data    = request.get_json()
-    checkin = CheckIn.query.get_or_404(checkin_id)
+    checkin = db.get_or_404(CheckIn, checkin_id)
 
     if not data or "user_id" not in data:
         return jsonify({"error": "user_id is required"}), 400
@@ -668,7 +660,7 @@ def create_facility():
         "map_x":           map_x,
         "map_y":           map_y
     }
-    if Facility.query.get(facility_dict["facility_id"]):
+    if db.session.get(Facility, facility_dict["facility_id"]):
         return jsonify({"error": f"Facility {facility_dict['facility_id']} already exists"}), 409
 
     if not validate_facility(facility_dict):
@@ -706,7 +698,7 @@ def update_facility(facility_id):
         400: If the request body is missing.
         404: If no facility with that ID exists.
     """
-    f    = Facility.query.get_or_404(facility_id)
+    f    = db.get_or_404(Facility, facility_id)
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -743,7 +735,7 @@ def add_hours(facility_id):
              are not on a 15-minute boundary, or close_time ≤ open_time.
         404: If no facility with that ID exists.
     """
-    Facility.query.get_or_404(facility_id)
+    db.get_or_404(Facility, facility_id)
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -807,7 +799,7 @@ def update_hours(facility_id, hours_id):
         404: If the hours record does not exist or does not belong to the
              given facility.
     """
-    hours = Facility_Hours.query.get_or_404(hours_id)
+    hours = db.get_or_404(Facility_Hours, hours_id)
     if hours.facility_id != facility_id:
         return jsonify({"error": f"Hours record {hours_id} does not belong to facility {facility_id}"}), 404
 
@@ -833,7 +825,7 @@ def update_hours(facility_id, hours_id):
         "open_time":   open_time,
         "close_time":  close_time
     }
-    if not validate_facility_hours(hours_dict):
+    if not validate_facility_hours(hours_dict, facility_id):
         return jsonify({"error": "Invalid hours data — check all fields are correctly typed"}), 400
 
     hours.day_of_week = hours_dict["day_of_week"]
@@ -872,7 +864,7 @@ def create_rules(facility_id):
         404: If no facility with that ID exists.
         409: If a rules record already exists for this facility.
     """
-    Facility.query.get_or_404(facility_id)
+    db.get_or_404(Facility, facility_id)
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -946,6 +938,35 @@ def update_rules(facility_id):
     db.session.commit()
     return jsonify({"message": f"Rules for {facility_id} updated"})
 
+def cancel_conflicting_checkins(facility_id, day_of_week, start_time, end_time, status):
+    """
+    Delete active check-ins that overlap a non-open schedule slot.
+
+    Open slots don't block check-ins, so this is a no-op when status is "open".
+    Staged deletions are added to the current session but not committed —
+    the caller is responsible for committing.
+
+    Args:
+        facility_id: The 8-character facility ID.
+        day_of_week: Day name string (e.g. "Monday").
+        start_time:  Slot start as a datetime.time.
+        end_time:    Slot end as a datetime.time.
+        status:      The schedule slot's status (e.g. "open", "class", "closed").
+    """
+    if status == "open":
+        return
+
+    conflicting = CheckIn.query.filter(
+        CheckIn.facility_id == facility_id,
+        CheckIn.day_of_week == day_of_week,
+        CheckIn.status      == "active",
+        CheckIn.start_time  <  end_time,
+        CheckIn.end_time    >  start_time
+    ).all()
+
+    for checkin in conflicting:
+        db.session.delete(checkin)
+
 # Admin: add a schedule slot
 @api.route("/admin/facilities/<facility_id>/schedule", methods=["POST"])
 def add_schedule(facility_id):
@@ -975,7 +996,7 @@ def add_schedule(facility_id):
              with an existing non-open slot.
         404: If no facility with that ID exists.
     """
-    Facility.query.get_or_404(facility_id)
+    db.get_or_404(Facility, facility_id)
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data provided"}), 400
@@ -1016,6 +1037,9 @@ def add_schedule(facility_id):
         note        = data.get("note")
     )
     db.session.add(slot)
+    db.session.flush()  # assign slot.schedule_id before committing
+    if slot.status != "open":
+        cancel_conflicting_checkins(facility_id, data["day_of_week"], start_time, end_time, data["status"])
     db.session.commit()
     return jsonify({"message": "Schedule slot added", "schedule_id": slot.schedule_id}), 201
 
@@ -1050,7 +1074,7 @@ def update_schedule(facility_id, schedule_id):
         404: If the schedule slot does not exist or does not belong to the
              given facility.
     """
-    slot = Schedule.query.get_or_404(schedule_id)
+    slot = db.get_or_404(Schedule, schedule_id)
     if slot.facility_id != facility_id:
         return jsonify({"error": f"Schedule slot {schedule_id} does not belong to facility {facility_id}"}), 404
 
@@ -1089,8 +1113,36 @@ def update_schedule(facility_id, schedule_id):
     slot.status      = schedule_dict["status"]
     slot.note        = data.get("note", slot.note)
 
+    if slot.status != "open":
+        cancel_conflicting_checkins(facility_id, schedule_dict["day_of_week"], start_time, end_time, schedule_dict["status"])
     db.session.commit()
     return jsonify({"message": f"Schedule slot {schedule_id} updated"})
+
+# Admin: delete a schedule slot
+@api.route("/admin/facilities/<facility_id>/schedule/<int:schedule_id>", methods=["DELETE"])
+def delete_schedule(facility_id, schedule_id):
+    """
+    DELETE /api/admin/facilities/<facility_id>/schedule/<schedule_id>
+
+    Permanently remove a schedule slot from the database.
+
+    Args:
+        facility_id (str): The 8-character facility ID — used to verify that
+                           the slot belongs to this facility.
+        schedule_id (int): The integer ID of the schedule slot to delete.
+
+    Returns:
+        200: JSON confirmation message.
+        404: If the schedule slot does not exist or does not belong to the
+             given facility.
+    """
+    slot = db.get_or_404(Schedule, schedule_id)
+    if slot.facility_id != facility_id:
+        return jsonify({"error": f"Schedule slot {schedule_id} does not belong to facility {facility_id}"}), 404
+
+    db.session.delete(slot)
+    db.session.commit()
+    return jsonify({"message": f"Schedule slot {schedule_id} deleted"})
 
 # Admin: cancel any check-in
 @api.route("/admin/checkins/<int:checkin_id>", methods=["DELETE"])
@@ -1108,7 +1160,7 @@ def admin_cancel_checkin(checkin_id):
         200: JSON confirmation message.
         404: If no check-in with that ID exists.
     """
-    checkin        = CheckIn.query.get_or_404(checkin_id)
+    checkin        = db.get_or_404(CheckIn, checkin_id)
     checkin.status = "cancelled"
     db.session.commit()
     return jsonify({"message": "Check-in cancelled by admin"})

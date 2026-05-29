@@ -17,7 +17,7 @@ class Facility(db.Model):
     # Relationships
     rules     = db.relationship("Rule", backref="facility", uselist=False)
     schedules = db.relationship("Schedule", backref="facility")
-    hours = db.relationship("facility_hours", backref="facility")
+    hours = db.relationship("Facility_Hours", backref="facility")
 
 class Rule(db.Model):
     __tablename__ = "rules"
@@ -65,11 +65,10 @@ class User(db.Model):
     __tablename__ = "users"
     
     user_id    = db.Column(db.Integer, primary_key=True)
-    duck_id    = db.Column(db.String(50), unique=True, nullable=False)  # UO DuckID
     name       = db.Column(db.String(100))
     email      = db.Column(db.String(100))
     
-    reservations = db.relationship("Reservation", backref="user")
+    checkin = db.relationship("CheckIn", backref="user")
 
 class CheckIn(db.Model):
     __tablename__ = "checkins"
