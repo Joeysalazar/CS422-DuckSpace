@@ -1,7 +1,13 @@
 # What Needs To Be Done
 
-## Currently Being Worked On
+## Current Status
 
+- Joey pushed the first UI version to `main`.
+- Kai has backend/API routes working on the `Kai` branch.
+- Robert is working on the seed/check-in usage estimate setup.
+- The UI currently uses mock data until the backend database has demo data ready.
+- Next integration step: connect the UI cards and analysis panel to the backend API routes.
+  
 ### Joey - Frontend / UI
 - Build the main homepage layout.
 - Add facility cards for each space.
