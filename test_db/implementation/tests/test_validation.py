@@ -192,7 +192,7 @@ class TestValidateRule:
         assert validate_rule({**VALID_RULE, "group_size_limit": 0}) is False
 
     def test_group_size_too_large(self, facility):
-        assert validate_rule({**VALID_RULE, "group_size_limit": 251}) is False
+        assert validate_rule({**VALID_RULE, "group_size_limit": 1001}) is False
 
     def test_group_size_boundary_min(self, facility):
         assert validate_rule({**VALID_RULE, "group_size_limit": 1}) is True

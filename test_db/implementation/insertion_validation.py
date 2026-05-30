@@ -209,7 +209,7 @@ def validate_rule(rule: dict) -> bool:
         return False
     if type(rule["reservation_type"]) != str or len(rule["reservation_type"]) > 30:
         return False
-    if type(rule["group_size_limit"]) != int or rule["group_size_limit"] < 1 or rule["group_size_limit"] > 250:
+    if type(rule["group_size_limit"]) != int or rule["group_size_limit"] < 1 or rule["group_size_limit"] > 1000:
         return False
     if type(rule["restrictions"]) != str:
         return False

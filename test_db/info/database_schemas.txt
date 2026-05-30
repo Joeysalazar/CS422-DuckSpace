@@ -3,7 +3,6 @@ CREATE TABLE facilities (
     name            VARCHAR(100) NOT NULL,
     location        VARCHAR(100),
     facility_type   VARCHAR(50),              -- court, room, studio, outdoor, etc.
-    hours           TEXT,                     -- 8:30 to 9:30
     managing_office VARCHAR(100),
     description     TEXT,
     map_x           FLOAT,                    -- coordinates for your map view
