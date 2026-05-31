@@ -1,0 +1,95 @@
+<!--
+File: templates/admin.html
+Purpose:
+    Simple admin preview page for Duck Space.
+
+    This page is not a full editing system yet. It shows the facilities
+    currently loaded from the backend database so the team can confirm that
+    the UI and database are connected.
+
+System:
+    Duck Space is a CS 422 student project that helps users compare campus
+    spaces by rules, schedule notes, group-size guidance, and next steps.
+
+Authors:
+    Joey Salazar
+
+Last updated:
+    May 2026
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Basic page setup for browser display and mobile scaling. -->
+    <meta charset="UTF-8">
+    <title>Duck Space Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Use the same stylesheet as the homepage. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- Page header explaining that this is a preview, not a full admin editor. -->
+<header>
+    <nav class="top-nav">
+        <a href="/">Home</a>
+        <a href="/admin">Admin Preview</a>
+        <a href="/api/facilities" target="_blank">API Data</a>
+    </nav>
+
+    <p class="tag">Admin Preview</p>
+    <h1>Duck Space Admin</h1>
+    <p>Review facilities currently loaded from the backend database.</p>
+    <p class="notice">Admin editing is planned, but this page is currently read-only.</p>
+</header>
+
+<main>
+    <!-- Short explanation for graders and teammates. -->
+    <section class="filters">
+        <h2>Backend Facility Data</h2>
+        <p class="muted">
+            This page confirms that Duck Space can read facility records from
+            the database-backed API work. Editing can be added later if needed.
+        </p>
+    </section>
+
+    <!-- Facility cards pulled from the database. -->
+    <section class="cards">
+
+        <!-- Create one card for each facility passed in from app.py. -->
+        {% for facility in facilities %}
+        <article class="space-card">
+            <div class="card-top">
+                <span>{{ facility.facility_type }}</span>
+                <span>{{ facility.managing_office }}</span>
+            </div>
+
+            <h3>{{ facility.name }}</h3>
+            <p class="muted">{{ facility.location }}</p>
+            <p>{{ facility.description }}</p>
+
+            <!-- Small database details to help verify the backend connection. -->
+            <div class="stats">
+                <div>
+                    <strong>{{ facility.facility_id }}</strong>
+                    <small>facility ID</small>
+                </div>
+                <div>
+                    <strong>{{ facility.facility_type }}</strong>
+                    <small>type</small>
+                </div>
+            </div>
+
+            <!-- Link to the facility detail page. -->
+            <a href="/facility/{{ facility.facility_id }}">
+                <button type="button">View Facility</button>
+            </a>
+        </article>
+        {% endfor %}
+    </section>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!--
+File: templates/facility.html
+Purpose:
+    Facility detail page for Duck Space.
+
+    This page shows one selected facility with its description, schedule,
+    rules, restrictions, and next step. It uses the same visual style as the
+    homepage so the project feels consistent.
+
+System:
+    Duck Space is a CS 422 student project that helps users compare campus
+    spaces by rules, schedule notes, group-size guidance, and next steps.
+
+Authors:
+    Joey Salazar
+
+Last updated:
+    May 2026
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Basic page setup for browser display and mobile scaling. -->
+    <meta charset="UTF-8">
+    <title>{{ space.name }} - Duck Space</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Use the same stylesheet as the homepage. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- Page header with the selected facility name. -->
+<header>
+    <nav class="top-nav">
+        <a href="/">Home</a>
+        <a href="/admin">Admin Preview</a>
+        <a href="/api/facilities" target="_blank">API Data</a>
+    </nav>
+
+    <p class="tag">Facility Details</p>
+    <h1>{{ space.name }}</h1>
+    <p>{{ space.location }} · {{ space.category }} · {{ space.facility_type }}</p>
+    <p class="notice">Not an official University of Oregon or Rec website.</p>
+</header>
+
+<main>
+    <!-- Two-column layout: facility info on the left, rules on the right. -->
+    <section class="layout">
+
+        <!-- Main facility information area. -->
+        <div>
+            <!-- Overview card. -->
+            <article class="space-card">
+                <div class="card-top">
+                    <span>{{ space.category }}</span>
+                    <span>{{ space.facility_type }}</span>
+                    <span>{{ space.noise_level }}</span>
+                </div>
+
+                <h2>Overview</h2>
+                <p>{{ space.description }}</p>
+
+                <!-- Quick stats reused from the homepage card design. -->
+                <div class="stats">
+                    <div>
+                        <strong>{{ space.current_count }}</strong>
+                        <small>checked in</small>
+                    </div>
+                    <div>
+                        <strong>{{ space.group_size_limit }}</strong>
+                        <small>group limit</small>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Schedule card. -->
+            <article class="space-card" style="margin-top: 18px;">
+                <h2>Schedule</h2>
+
+                <!-- Show schedule rows if the backend has them. -->
+                {% if space.schedule %}
+                    <ul>
+                        {% for item in space.schedule %}
+                        <li>
+                            <strong>{{ item.day }}:</strong>
+                            {{ item.time }} — {{ item.status }}
+
+                            <!-- Show schedule notes only when they exist. -->
+                            {% if item.note %}
+                                ({{ item.note }})
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No schedule data listed for this facility.</p>
+                {% endif %}
+
+                <p class="muted">This is demo schedule guidance, not live official availability.</p>
+            </article>
+        </div>
+
+        <!-- Right-side rules and next-step panel. -->
+        <aside id="analysisPanel">
+            <p class="tag">Rules and Next Steps</p>
+
+            <!-- Cost information from the rules table. -->
+            <div class="analysis-box">
+                <strong>Cost</strong>
+                <p>{{ space.cost_status }}</p>
+                <p class="muted">{{ space.cost_notes }}</p>
+            </div>
+
+            <!-- Reservation or use type from the rules table. -->
+            <div class="analysis-box">
+                <strong>Use Type</strong>
+                <p>{{ space.reservation_type }}</p>
+            </div>
+
+            <!-- Restrictions explain what users should avoid or watch for. -->
+            <div class="analysis-box">
+                <strong>Restrictions</strong>
+                <p>{{ space.restrictions }}</p>
+            </div>
+
+            <!-- Extra notes from the backend rules data. -->
+            <div class="analysis-box">
+                <strong>Notes</strong>
+                <p>{{ space.rule_notes }}</p>
+            </div>
+
+            <!-- Simple guidance for what the user should do next. -->
+            <div class="analysis-box">
+                <strong>Next Step</strong>
+                <p>{{ space.next_step }}</p>
+            </div>
+
+            <!-- Navigation back to the homepage. -->
+            <a href="/">
+                <button type="button">Back to Spaces</button>
+            </a>
+        </aside>
+    </section>
+</main>
+
+</body>
+</html>

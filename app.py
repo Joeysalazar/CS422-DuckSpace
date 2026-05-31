@@ -1,165 +1,350 @@
-from flask import Flask, render_template
+"""
+File: app.py
+Purpose:
+    Main Flask application for Duck Space.
 
+    This file connects the frontend UI to the backend database/API work.
+    The homepage still uses the existing card layout, but the facility data
+    now comes from the SQLite database instead of the old hardcoded mock list.
+
+System:
+    Duck Space is a CS 422 student project that helps users compare campus
+    spaces by rules, schedule notes, group-size limits, and next steps.
+
+Authors:
+    Initial UI: Joey Salazar
+    Backend/API files: Kai Hogan/team backend work
+    Integration update: Joey Salazar
+
+Last updated:
+    May 2026
+"""
+
+from pathlib import Path
+import os
+import sys
+import threading
+import webbrowser
+
+from flask import Flask, render_template, abort
+
+
+# ---------------------------------------------------------------------
+# File paths
+# ---------------------------------------------------------------------
+
+# BASE_DIR points to the main project folder: duck-space/
+BASE_DIR = Path(__file__).resolve().parent
+
+# BACKEND_DIR points to Kai's backend/API folder.
+# This lets the root app reuse the backend models and routes.
+BACKEND_DIR = BASE_DIR / "test_db" / "implementation"
+
+# DB_PATH points to the working local SQLite demo database.
+# For now, we are using SQLite because the Neon database is not seeded yet.
+DB_PATH = BACKEND_DIR / "instance" / "duckspace_demo.db"
+
+
+# ---------------------------------------------------------------------
+# Backend imports
+# ---------------------------------------------------------------------
+
+# Add the backend folder to Python's import path.
+# Without this, the root app would not know where models.py and routes.py are.
+sys.path.insert(0, str(BACKEND_DIR))
+
+# Import the database object, database tables, and API routes from the backend.
+from models import db, Facility, Rule, Schedule, Facility_Hours, CheckIn
+from routes import api
+
+
+# ---------------------------------------------------------------------
+# Flask app setup
+# ---------------------------------------------------------------------
+
+# Create the Flask application.
 app = Flask(__name__)
 
-spaces = [
-    {
-        "facility_id": "REC00001",
-        "name": "Oldtown Court 1",
-        "location": "Student Recreation Center",
-        "category": "Recreation",
-        "facility_type": "Court",
-        "noise_level": "Moderate",
-        "description": "Court space used for open recreation activities.",
-        "reservation_type": "First-come, first-served",
-        "cost_status": "Free for casual use",
-        "group_size_limit": 5,
-        "current_count": 4,
-        "restrictions": "Open rec has lower priority than classes, clubs, and scheduled programs.",
-        "rule_notes": "Groups over 5 may need staff approval or rental guidance.",
-        "next_step": "Drop in during open rec hours and check posted schedules before using.",
-        "schedule": [
-            {"day": "Monday", "time": "6:00 AM - 10:45 PM", "status": "Open Rec"},
-            {"day": "Tuesday", "time": "10:30 AM - 12:00 PM", "status": "Class/Reserved"}
-        ]
-    },
-    {
-        "facility_id": "REC00002",
-        "name": "Studio 283",
-        "location": "Student Recreation Center",
-        "category": "Recreation",
-        "facility_type": "Studio",
-        "noise_level": "Moderate",
-        "description": "Studio space with limited open recreation use.",
-        "reservation_type": "Limited drop-in",
-        "cost_status": "Depends on use",
-        "group_size_limit": 5,
-        "current_count": 2,
-        "restrictions": "Student org practices and sound system use may not be allowed during open use.",
-        "rule_notes": "PE and Rec programs have priority.",
-        "next_step": "Check the posted room schedule or ask staff before using.",
-        "schedule": [
-            {"day": "Monday", "time": "8:30 PM - 10:45 PM", "status": "Open Rec"},
-            {"day": "Thursday", "time": "6:30 PM - 10:45 PM", "status": "Open Rec"}
-        ]
-    },
-    {
-        "facility_id": "REC00003",
-        "name": "Student Tennis Center",
-        "location": "Student Recreation Center",
-        "category": "Recreation",
-        "facility_type": "Court",
-        "noise_level": "Moderate",
-        "description": "Tennis court space with open recreation and reservation options.",
-        "reservation_type": "Reservable",
-        "cost_status": "Free/Depends",
-        "group_size_limit": 5,
-        "current_count": 8,
-        "restrictions": "Courts should be used for tennis. Non-marking shoes may be required.",
-        "rule_notes": "This is one of the Rec spaces with a reservation option.",
-        "next_step": "Check RecWeb or use during posted open recreation hours.",
-        "schedule": [
-            {"day": "Monday", "time": "5:30 PM - 8:30 PM", "status": "Open/Reservable"},
-            {"day": "Friday", "time": "Closed", "status": "Closed"}
-        ]
-    },
-    {
-        "facility_id": "STUDY001",
-        "name": "EMU Study Lounge",
-        "location": "Erb Memorial Union",
-        "category": "Study",
-        "facility_type": "Study Space",
-        "noise_level": "Moderate",
-        "description": "Open study area for individual studying, casual work, or meeting between classes.",
-        "reservation_type": "Drop-in",
-        "cost_status": "Free",
-        "group_size_limit": 6,
-        "current_count": 12,
-        "restrictions": "Shared space. Large groups should avoid taking over seating during busy times.",
-        "rule_notes": "Good for students who do not need a completely quiet space.",
-        "next_step": "Use as a drop-in study spot. For quieter work, choose a library-style space instead.",
-        "schedule": [
-            {"day": "Monday", "time": "Morning - Evening", "status": "Usually Available"},
-            {"day": "Tuesday", "time": "Morning - Evening", "status": "Usually Available"},
-            {"day": "Friday", "time": "Morning - Afternoon", "status": "Usually Available"}
-        ]
-    },
-    {
-        "facility_id": "STUDY002",
-        "name": "Library Quiet Study Area",
-        "location": "Campus Library",
-        "category": "Study",
-        "facility_type": "Study Space",
-        "noise_level": "Quiet",
-        "description": "Quiet study area for focused individual work.",
-        "reservation_type": "Drop-in",
-        "cost_status": "Free",
-        "group_size_limit": 2,
-        "current_count": 6,
-        "restrictions": "Keep noise low. Group conversations should move to a group study room.",
-        "rule_notes": "Best for students who want a quiet study environment.",
-        "next_step": "Use this space for quiet work. If studying with friends, look for a group study room.",
-        "schedule": [
-            {"day": "Monday", "time": "Morning - Evening", "status": "Usually Available"},
-            {"day": "Wednesday", "time": "Morning - Evening", "status": "Usually Available"},
-            {"day": "Friday", "time": "Morning - Afternoon", "status": "Usually Available"}
-        ]
-    },
-    {
-        "facility_id": "STUDY003",
-        "name": "Dining Hall Study Tables",
-        "location": "Campus Dining Area",
-        "category": "Study",
-        "facility_type": "Dining / Social",
-        "noise_level": "Loud",
-        "description": "Casual tables that can be used for studying, eating, or group work.",
-        "reservation_type": "Drop-in",
-        "cost_status": "Free/Depends",
-        "group_size_limit": 8,
-        "current_count": 18,
-        "restrictions": "Can be noisy during meal times. Seating may be limited when dining traffic is high.",
-        "rule_notes": "Better for social studying than quiet focused work.",
-        "next_step": "Use this space if you are okay with background noise and a casual environment.",
-        "schedule": [
-            {"day": "Monday", "time": "Lunch - Evening", "status": "Busy"},
-            {"day": "Tuesday", "time": "Lunch - Evening", "status": "Busy"},
-            {"day": "Thursday", "time": "Afternoon - Evening", "status": "Usually Available"}
-        ]
-    },
-    {
-        "facility_id": "MEET001",
-        "name": "Small Group Meeting Room",
-        "location": "Campus Building",
-        "category": "Meeting",
-        "facility_type": "Room",
-        "noise_level": "Quiet",
-        "description": "Small room for group work, project meetings, or club planning.",
-        "reservation_type": "May require reservation",
-        "cost_status": "Free/Depends",
-        "group_size_limit": 6,
-        "current_count": 0,
-        "restrictions": "May require reservation depending on the building or department.",
-        "rule_notes": "Good fit for teams that need a quieter shared workspace.",
-        "next_step": "Check the managing office or reservation page before relying on this room.",
-        "schedule": [
-            {"day": "Monday", "time": "Afternoon", "status": "Sample Available"},
-            {"day": "Wednesday", "time": "Afternoon", "status": "Sample Available"}
-        ]
+# Tell Flask-SQLAlchemy to use the local SQLite database.
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{DB_PATH.as_posix()}"
+
+# Disable a Flask-SQLAlchemy tracking feature that is not needed for this project.
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Connect the database object to this Flask app.
+db.init_app(app)
+
+# Register Kai's API routes under /api.
+# Example: /api/facilities
+app.register_blueprint(api, url_prefix="/api")
+
+
+# ---------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------
+
+def format_time(value):
+    """
+    Convert a database time value into a cleaner display string.
+
+    Example:
+        06:00:00.000000 becomes 6:00 AM
+        22:45:00.000000 becomes 10:45 PM
+    """
+
+    # If the database has no time value, show a safe message.
+    if value is None:
+        return "Unknown"
+
+    # Convert the database value to text so it can be cleaned up.
+    text = str(value)
+
+    # Remove microseconds if they are included.
+    # Example: 06:00:00.000000 becomes 06:00:00
+    if "." in text:
+        text = text.split(".")[0]
+
+    # Split the time into hour/minute/second pieces.
+    parts = text.split(":")
+
+    # If the time has at least hour and minute values, format it nicely.
+    if len(parts) >= 2:
+        hour = int(parts[0])
+        minute = int(parts[1])
+
+        # Decide whether the time is AM or PM.
+        suffix = "AM" if hour < 12 else "PM"
+
+        # Convert 24-hour time to 12-hour time.
+        display_hour = hour % 12
+
+        # In 12-hour time, 0 should display as 12.
+        if display_hour == 0:
+            display_hour = 12
+
+        return f"{display_hour}:{minute:02d} {suffix}"
+
+    # If the value was not in the expected format, return it as-is.
+    return text
+
+
+def get_noise_level(facility_type):
+    """
+    Estimate the noise level for a facility.
+
+    The current backend database does not store noise_level yet.
+    This keeps the UI working without changing the schema right now.
+    """
+
+    # Rec courts and studios are usually moderate noise spaces.
+    if facility_type == "Studio":
+        return "Moderate"
+
+    if facility_type == "Court":
+        return "Moderate"
+
+    # This is included for future study-space data.
+    if facility_type == "Study Space":
+        return "Quiet"
+
+    # If the facility type is unknown, avoid guessing too strongly.
+    return "Unknown"
+
+
+def get_category(facility_type):
+    """
+    Estimate the category for a facility.
+
+    The current backend database does not store category yet.
+    The existing UI needs category for filtering, so this function derives it
+    from facility_type for now.
+    """
+
+    # Current demo backend data is mainly PE and Rec spaces.
+    if facility_type in ["Court", "Studio"]:
+        return "Recreation"
+
+    # These are included for future facility types.
+    if facility_type == "Study Space":
+        return "Study"
+
+    if facility_type == "Room":
+        return "Meeting"
+
+    # Use a general category when there is no better match.
+    return "Other"
+
+
+def get_current_count(facility_id):
+    """
+    Estimate current usage from active check-ins.
+
+    The checkins table is currently empty in the demo database, so this usually
+    returns 0. Later, if check-ins are added, this will sum active group sizes.
+    """
+
+    # Get all active check-ins for this facility.
+    checkIns = CheckIn.query.filter_by(
+        facility_id=facility_id,
+        status="active"
+    ).all()
+
+    # Start the count at 0.
+    total = 0
+
+    # Add each active check-in's group size to the total.
+    for checkIn in checkIns:
+        if checkIn.group_size:
+            total += checkIn.group_size
+
+    return total
+
+
+def build_space_data(facility):
+    """
+    Build one space dictionary for the frontend.
+
+    The old UI expects each space to have fields like category, noise_level,
+    current_count, rules, and schedule. The backend database stores those
+    pieces across multiple tables, so this function gathers them into one
+    dictionary for the card UI.
+    """
+
+    # Get the rules row for this facility.
+    rule = Rule.query.filter_by(facility_id=facility.facility_id).first()
+
+    # Get all schedule rows for this facility.
+    schedules = Schedule.query.filter_by(
+        facility_id=facility.facility_id
+    ).order_by(
+        Schedule.day_of_week,
+        Schedule.start_time
+    ).all()
+
+    # Use the database group limit if it exists.
+    # If not, use 5 because Rec guidance treats 5+ as needing extra guidance.
+    group_limit = rule.group_size_limit if rule and rule.group_size_limit else 5
+
+    # Convert database schedule rows into the format the existing UI expects.
+    schedule_items = []
+
+    for item in schedules:
+        start = format_time(item.start_time)
+        end = format_time(item.end_time)
+
+        schedule_items.append({
+            "day": item.day_of_week,
+            "time": f"{start} - {end}",
+            "status": item.status.title() if item.status else "Unknown",
+            "note": item.note or ""
+        })
+
+    # Pull rule values if they exist.
+    # These defaults keep the page from crashing if a facility has no rule row.
+    reservation_type = rule.reservation_type if rule else "Unknown"
+    rule_notes = rule.rule_notes if rule else "No rule notes available."
+
+    # Return one complete space object for the template and JavaScript.
+    return {
+        "facility_id": facility.facility_id,
+        "name": facility.name,
+        "location": facility.location,
+        "category": get_category(facility.facility_type),
+        "facility_type": facility.facility_type,
+        "noise_level": get_noise_level(facility.facility_type),
+        "description": facility.description,
+        "reservation_type": reservation_type,
+        "cost_status": rule.cost_status if rule else "Unknown",
+        "cost_notes": rule.cost_notes if rule else "No cost notes available.",
+        "group_size_limit": group_limit,
+        "current_count": get_current_count(facility.facility_id),
+        "restrictions": rule.restrictions if rule else "No restrictions listed.",
+        "rule_notes": rule_notes,
+        "next_step": f"{reservation_type}. {rule_notes}",
+        "schedule": schedule_items
     }
-]
+
+
+# ---------------------------------------------------------------------
+# Page routes
+# ---------------------------------------------------------------------
 
 @app.route("/")
 def index():
+    """
+    Show the main Duck Space homepage.
+
+    The homepage displays facility cards. Each card is built from the backend
+    database, then passed into the existing index.html template.
+    """
+
+    # Get all facilities from the database in alphabetical order.
+    facilities = Facility.query.order_by(Facility.name).all()
+
+    # Convert each database facility into the format the frontend expects.
+    spaces = [build_space_data(facility) for facility in facilities]
+
+    # Render the existing homepage with database-backed spaces.
     return render_template("index.html", spaces=spaces)
 
-if __name__ == "__main__":
-    import os
-    import threading
-    import webbrowser
 
+@app.route("/facility/<facility_id>")
+def facility_detail(facility_id):
+    """
+    Show a detail page for one facility.
+
+    This gives the project a working facility page instead of leaving
+    templates/facility.html empty.
+    """
+
+    # Find the selected facility by its 8-character ID.
+    facility = Facility.query.filter_by(facility_id=facility_id).first()
+
+    # If the ID does not exist, return a 404 page.
+    if facility is None:
+        abort(404)
+
+    # Build the same frontend-friendly space object used on the homepage.
+    space = build_space_data(facility)
+
+    # Load facility hours for the detail page.
+    hours = Facility_Hours.query.filter_by(
+        facility_id=facility_id
+    ).order_by(
+        Facility_Hours.day_of_week
+    ).all()
+
+    # Render the facility detail page.
+    return render_template("facility.html", space=space, hours=hours)
+
+
+@app.route("/admin")
+def admin():
+    """
+    Show a simple admin preview page.
+
+    This is not a full editing system yet. It shows the facilities currently
+    loaded from the database so the team can verify backend data from the UI.
+    """
+
+    # Get all facilities for the admin preview list.
+    facilities = Facility.query.order_by(Facility.name).all()
+
+    # Render the admin preview page.
+    return render_template("admin.html", facilities=facilities)
+
+
+# ---------------------------------------------------------------------
+# Run the app
+# ---------------------------------------------------------------------
+
+if __name__ == "__main__":
+    # Local address for the Flask app.
     url = "http://127.0.0.1:5000"
 
+    # Open the browser once when Flask's debug reloader starts the real process.
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
+    # Start the Flask development server.
     app.run(debug=True)
